@@ -37,6 +37,13 @@ def auth(username, passwd):
         print(f"Error de conexión a la base de datos: {excp}")
         return None
 
+@app.route("/user", methods=["PUT"])
+def changeUser():
+    username = request.json.get("username")
+    user_type = request.json.get("user_type")
+    print(session.values())
+    return {"message": "Changed user type to ", "type":user_type}, 201
+
 @app.route("/login", methods=["POST"])
 def login():
     username = request.json.get("username")
@@ -140,7 +147,79 @@ def mainEscuela():
     elif request.method == "GET":
         return verEscuelas()
     return {"error:" "la consulta no es valida"}, 500
+def registerRep():
+    #usuario
+    #username= request.json.get("username")
+    # lugar
+    calle = request.json.get("calle")
+    altura = request.json.get("altura")
+    localidad = request.json.get("localidad")
+    # mapa
+    lat = request.json.get("lat")
+    lng = request.json.get("lng")
+    #categoria
+    descripcion = request.json.get("reporte")
+    categoria = request.json.get("categoria")
+    escuela = "prueba"
+
     
+    print(request.json)
+    if not lat or not categoria or not descripcion or not lng or not localidad or not altura or not calle or not escuela:
+        return {"error": "Se requiere ingresar todos los campos"}, 403
+
+    try:
+        db = mysql.connector.connect(
+            host="localhost",
+            user="root",
+            password="",
+            database="reports",
+            port=3306
+        )
+        cursor = db.cursor()
+        query = """
+        INSERT INTO reports (calle, altura, localidad, lat,lng,descripcion,categoria,escuela) 
+        VALUES (%s, %s, %s, %s,%s,%s,%s,%s)
+        """
+        cursor.execute(query, (calle,altura,localidad,lat,lng,descripcion,categoria,escuela))
+        db.commit()
+        cursor.close()
+        db.close()
+        return {"message": "Reporte Ingresado"}, 201
+    except mysql.connector.Error as excp:
+        print(f"Error Ingresando el reporte: {excp}")
+        return {"error": "Error registrando el reporte"}, 500
+
+def verRep():
+    try:
+        db = mysql.connector.connect(
+            host="localhost",
+            user="root",
+            password="",
+            database="reports",
+            port=3306
+        )
+        cursor = db.cursor()
+        query = "SELECT lat,lng,descripcion FROM reports"
+        cursor.execute(query,None)
+        res = cursor.fetchall()
+        print(res)
+        db.commit()
+        cursor.close()
+        db.close()
+        return res, 201
+    except mysql.connector.Error as excp:
+        print(f"Error Ingresando el reporte: {excp}")
+        return {"error": "Error registrando el reporte"}, 500
+
+
+@app.route("/reports", methods=["POST", "GET"])
+def repMet():
+    if request.method == "POST":
+        return registerRep()
+    elif request.method == "GET": 
+        return verRep()
+    return "ha habido u error", 500
+
 
 def verEscuelas():
     schoolcue = request.args.get('cue',default="", type="string")
