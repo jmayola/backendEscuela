@@ -9,9 +9,8 @@ app = Flask(__name__)
 CORS(app)
 app.secret_key = b'_5#y2L"F4Q8DsasDajwuh12z\n\xec]/'
 
-# Función de autenticación
-def auth(username, passwd):
-    """Define si un usuario puede iniciar sesión o no"""
+# Conexión a la base de datos
+def db_connection():
     try:
         db = mysql.connector.connect(
             host="localhost",
@@ -20,59 +19,75 @@ def auth(username, passwd):
             database="classpanner",
             port=3306
         )
-        cursor = db.cursor(dictionary=True)
-        query = "SELECT username, user_type, password FROM usuarios WHERE username = %s"
-        cursor.execute(query, (username,))
-        result = cursor.fetchone()
-        cursor.close()
-        db.close()
-
-        print(f"Auth result for {username}: {result}")  # Debugging
-
-        if not result or not check_password_hash(result["password"], passwd):
-            return None
-        return result['user_type']
+        return db
     except mysql.connector.Error as excp:
         print(f"Error de conexión a la base de datos: {excp}")
         return None
 
+# Ejecutar consultas en la base de datos
+def execute_query(query, params=None, fetch_one=False, fetch_all=False):
+    db = db_connection()
+    if db is None:
+        return None
+
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute(query, params)
+        if fetch_one:
+            result = cursor.fetchone()
+        elif fetch_all:
+            result = cursor.fetchall()
+        else:
+            result = None
+        db.commit()
+        cursor.close()
+        db.close()
+        return result
+    except mysql.connector.Error as excp:
+        print(f"Error ejecutando la consulta: {excp}")
+        return None
+
+# Autenticación de usuarios
+def auth(username, passwd):
+    query = "SELECT username, user_type, password FROM usuarios WHERE username = %s"
+    result = execute_query(query, (username,), fetch_one=True)
+
+    if not result or not check_password_hash(result["password"], passwd):
+        return None
+    return result['user_type']
+
+# Cambiar tipo de usuario
 @app.route("/user", methods=["PUT"])
 def changeUser():
     username = request.json.get("username")
     user_type = request.json.get("user_type")
-    print(f"Changing user {username} to type {user_type}")  # Debugging
-    print(session.values())
     return {"message": f"Changed user type to {user_type}"}, 201
 
+# Inicio de sesión
 @app.route("/login", methods=["POST"])
 def login():
     username = request.json.get("username")
     password = request.json.get("password")
 
-    print(f"Login attempt for {username}")  # Debugging
-
     if not username or not password:
         return {"error": "Ingresa usuario y contraseña"}, 400
 
-    user = auth(username, password)
-    if user:
+    user_type = auth(username, password)
+    if user_type:
         session["username"] = username
-        session["user_type"] = user
-        print(f"Login successful for {username}, user type: {user}")  # Debugging
-        return {"message": "Login successful", "user": user}, 200
+        session["user_type"] = user_type
+        return {"message": "Login successful", "user_type": user_type}, 200
     else:
-        print(f"Login failed for {username}")  # Debugging
         return {"error": "El usuario o la contraseña son incorrectos."}, 401
 
+# Registro de usuarios
 @app.route("/register", methods=["POST"])
 def register():
     username = request.json.get("username")
     password = request.json.get("password")
-    birthday = request.json.get("birthday")
     repassword = request.json.get("repassword")
+    birthday = request.json.get("birthday")
     dni = request.json.get("dni")
-
-    print(f"Register attempt for {username}")  # Debugging
 
     if not username or not birthday or not repassword or not dni:
         return {"error": "All fields are required"}, 403
@@ -81,248 +96,104 @@ def register():
         return {"error": "Las contraseñas no coinciden"}, 400
 
     hashed_password = generate_password_hash(password)
-
-    try:
-        db = mysql.connector.connect(
-            host="localhost",
-            user="flask_user",
-            password="cosa222",
-            database="classpanner",
-            port=3306
-        )
-        cursor = db.cursor()
-        query = """
+    query = """
         INSERT INTO usuarios (username, password, dni, nacimiento) 
         VALUES (%s, %s, %s, %s)
-        """
-        cursor.execute(query, (username, hashed_password, dni, birthday))
-        db.commit()
-        cursor.close()
-        db.close()
-        print(f"User {username} registered successfully")  # Debugging
-        return {"message": "User registered successfully"}, 201
-    except mysql.connector.IntegrityError:
-        return {"error": "User alias or email already exists"}, 409
-    except mysql.connector.Error as excp:
-        print(f"Error registrando usuario: {excp}")
-        return {"error": "Error registering user"}, 500
+    """
+    params = (username, hashed_password, dni, birthday)
+    result = execute_query(query, params)
 
+    if result is None:
+        return {"error": "Error registrando el usuario"}, 500
+    return {"message": "Usuario registrado exitosamente"}, 201
+
+# Inicio de sesión con Google
 @app.route("/google-login", methods=["POST"])
 def google_login():
     user_data = request.json
     email = user_data.get("email")
     username = user_data.get("username")
-    password = generate_random_token()  # Genera una contraseña aleatoria
-
-    print(f"Google login attempt for {username}, email: {email}")  # Debugging
+    password = generate_random_token()
 
     if not email or not username:
-        return {"error": "Email and username are required"}, 400
+        return {"error": "Email y nombre de usuario son obligatorios"}, 400
 
-    try:
-        db = mysql.connector.connect(
-            host="localhost",
-            user="flask_user",
-            password="cosa222",
-            database="classpanner",
-            port=3306
-        )
-        cursor = db.cursor()
-        query = "SELECT user_email FROM users WHERE user_email = %s"
-        cursor.execute(query, (email,))
-        existing_user = cursor.fetchone()
+    query = "SELECT user_email FROM users WHERE user_email = %s"
+    existing_user = execute_query(query, (email,), fetch_one=True)
 
-        if existing_user:
-            print(f"User already exists: {existing_user}")  # Debugging
-            return {"message": "User already exists"}, 200
+    if existing_user:
+        return {"message": "Usuario ya registrado"}, 200
 
-        query = """
+    query = """
         INSERT INTO users (user_name, user_alias, user_email, user_password, user_type)
         VALUES (%s, %s, %s, %s, %s)
-        """
-        cursor.execute(query, (username, username, email, generate_password_hash(password), 'google_user'))
-        db.commit()
-        cursor.close()
-        db.close()
-        print(f"User {username} registered successfully via Google")  # Debugging
-        return {"message": "User registered successfully via Google"}, 201
-    except mysql.connector.Error as excp:
-        print(f"Error registrando usuario: {excp}")
-        return {"error": "Error registering user"}, 500
+    """
+    params = (username, username, email, generate_password_hash(password), 'google_user')
+    result = execute_query(query, params)
 
-@app.route("/escuela", methods=["POST", "GET"])
-def mainEscuela():
-    if request.method == "POST":
-        print("POST request to /escuela")  # Debugging
-        return registrarEscuela()
-    elif request.method == "GET":
-        print("GET request to /escuela")  # Debugging
-        return verEscuelas()
-    return {"error": "la consulta no es valida"}, 500
+    if result is None:
+        return {"error": "Error registrando el usuario"}, 500
+    return {"message": "Usuario registrado vía Google"}, 201
 
-def registerRep():
-    lat = request.json.get("lat")
-    lng = request.json.get("lng")
-    print(f"lat: {lat}, lng: {lng}")
-    # Lugar
-    calle = request.json.get("calle")
-    altura = request.json.get("altura")
-    localidad = request.json.get("localidad")
-    # Mapa
-    lat = request.json.get("lat")
-    lng = request.json.get("lng")
-    # Categoria
-    descripcion = request.json.get("reporte")
-    categoria = request.json.get("categoria")
-    escuela = "prueba"
-
-    print(f"Registering report: {calle}, {altura}, {localidad}, {lat}, {lng}, {descripcion}, {categoria}, {escuela}")  # Debugging
-
-    if not lat or not categoria or not descripcion or not lng or not localidad or not altura or not calle or not escuela:
-        return {"error": "Se requiere ingresar todos los campos"}, 403
-
-    try:
-        db = mysql.connector.connect(
-            host="localhost",
-            user="flask_user",
-            password="cosa222",
-            database="classpanner",
-            port=3306
-        )
-        cursor = db.cursor()
-        query = """
-        INSERT INTO reports (calle, altura, localidad, lat, lng, descripcion, categoria, escuela) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """
-        cursor.execute(query, (calle, altura, localidad, lat, lng, descripcion, categoria, escuela))
-        db.commit()
-        cursor.close()
-        db.close()
-        print("Report registered successfully")  # Debugging
-        return {"message": "Reporte Ingresado"}, 201
-    except mysql.connector.Error as excp:
-        print(f"Error ingresando el reporte: {excp}")
-        return {"error": "Error registrando el reporte"}, 500
-
-def verRep():
-    try:
-        db = mysql.connector.connect(
-            host="localhost",
-            user="flask_user",
-            password="cosa222",
-            database="classpanner",
-            port=3306
-        )
-        cursor = db.cursor()
-        query = "SELECT lat, lng, descripcion FROM reports"
-        cursor.execute(query)
-        res = cursor.fetchall()
-        cursor.close()
-        db.close()
-        print(f"Retrieved reports: {res}")  # Debugging
-        return jsonify(res), 201
-    except mysql.connector.Error as excp:
-        print(f"Error ingresando el reporte: {excp}")
-        return {"error": "Error registrando el reporte"}, 500
-
+# Manejo de reportes
 @app.route("/reports", methods=["POST", "GET"])
 def repMet():
     if request.method == "POST":
-        print("POST request to /reports")  # Debugging
         return registerRep()
-    elif request.method == "GET": 
-        print("GET request to /reports")  # Debugging
+    elif request.method == "GET":
         return verRep()
-    return {"error": "ha habido un error"}, 500
+    return {"error": "Ha ocurrido un error"}, 500
 
-def verEscuelas():
-    schoolcue = request.args.get('cue', default="", type="string")
-    schoolid = request.args.get('id', default=0, type="int")
-    localidad = request.args.get('localidad', default="", type="string")
-    
-    print(f"Querying schools with cue: {schoolcue}, id: {schoolid}, localidad: {localidad}")  # Debugging
+def registerRep():
+    # Extraer datos del reporte
+    data = request.json
+    fields = ["lat", "lng", "calle", "altura", "localidad", "descripcion", "categoria"]
+    if not all(data.get(field) for field in fields):
+        return {"error": "Se requiere ingresar todos los campos"}, 403
 
-    try:
-        db = mysql.connector.connect(
-            host="localhost",
-            user="flask_user",
-            password="cosa222",
-            database="classpanner",
-            port=3306
-        )
-        cursor = db.cursor(dictionary=True)
-        if schoolcue:
-            query = "SELECT * FROM schools WHERE cue = %s"
-            cursor.execute(query, (schoolcue,))
-        elif schoolid:
-            query = "SELECT * FROM schools WHERE id = %s"
-            cursor.execute(query, (schoolid,))
-        elif localidad:
-            query = "SELECT * FROM schools WHERE localidad = %s"
-            cursor.execute(query, (localidad,))
-        else:
-            query = "SELECT * FROM schools"
-            cursor.execute(query)
-
-        res = cursor.fetchall()
-        cursor.close()
-        db.close()
-        print(f"Retrieved schools: {res}")  # Debugging
-        return jsonify(res), 200
-    except mysql.connector.Error as excp:
-        print(f"Error obteniendo las escuelas: {excp}")
-        return {"error": "Error obteniendo las escuelas"}, 500
-
-@app.route("/escuelas", methods=["POST"])
-def registrar_escuela():
-  print("registrar_escuela llamado")
-  print("Request JSON:", request.json)
-  nombre = request.json.get("nombreEstablecimiento")
-  director = request.json.get("director")
-  calle = request.json.get("calle")
-  altura = request.json.get("altura")
-  localidad = request.json.get("localidad")
-  cue = request.json.get("cue")
-  latitud = request.json.get("latitud")
-  longitud = request.json.get("longitud")
-  docentes = request.json.get("docentes")
-  cursos = request.json.get("cursos")
-
-  print(f"Registering school: {nombre}, director: {director}, calle: {calle}, altura: {altura}, localidad: {localidad}, cue: {cue}, latitud: {latitud}, longitud: {longitud}, docentes: {docentes}, cursos: {cursos}")
-
-  if not nombre or not director or not calle or not altura or not localidad or not cue or not latitud or not longitud:
-    print("Error: Campos requeridos no ingresados")
-    return {"error": "Se requiere ingresar todos los campos"}, 403
-
-  try:
-    db = mysql.connector.connect(
-      host="localhost",
-      user="flask_user",
-      password="cosa222",
-      database="classpanner",
-      port=3306
-    )
-    print("Conexión a la base de datos establecida")
-    cursor = db.cursor()
     query = """
-    INSERT INTO escuelas (nombre, director, calle, altura, localidad, cue, lat, lng) 
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO reports (calle, altura, localidad, lat, lng, descripcion, categoria, escuela) 
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     """
-    print("Ejecutando query")
-    cursor.execute(query, (nombre, director, calle, altura, localidad, cue, latitud, longitud))
-    print("Query ejecutado")
-    db.commit()
-    print("Cambios confirmados")
-    cursor.close()
-    db.close()
-    print("Conexión a la base de datos cerrada")
-    print("School registered successfully")
-    return {"message": "Escuela registrada correctamente"}, 201
-  except mysql.connector.Error as excp:
-    print(f"Error registrando la escuela: {excp}")
-    return {"error": "Error registrando la escuela"}, 500# Generador de token aleatorio
-def generate_random_token(length=10):
-    return ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(length))
+    params = (data["calle"], data["altura"], data["localidad"], data["lat"], data["lng"], data["descripcion"], data["categoria"], "prueba")
+    result = execute_query(query, params)
 
-if __name__ == "__main__":
-    app.run(debug=True)
+    if result is None:
+        return {"error": "Error registrando el reporte"}, 500
+    return {"message": "Reporte ingresado"}, 201
+
+def verRep():
+    query = "SELECT lat, lng, descripcion FROM reports"
+    result = execute_query(query, fetch_all=True)
+
+    if result is None:
+        return {"error": "Error obteniendo reportes"}, 500
+    return jsonify(result), 200
+
+# Registro de escuelas
+@app.route("/register_school", methods=["POST"])
+def register_school():
+    # Obtener los datos de la solicitud
+    school_name = request.json.get("school_name")
+    address = request.json.get("address")
+    city = request.json.get("city")
+    phone = request.json.get("phone")
+    email = request.json.get("email")
+
+    # Validar que todos los campos estén presentes
+    if not all([school_name, address, city, phone, email]):
+        return {"error": "Todos los campos son obligatorios"}, 403
+
+    # Insertar la escuela en la base de datos
+    query = """
+        INSERT INTO schools (school_name, address, city, phone, email) 
+        VALUES (%s, %s, %s, %s, %s)
+    """
+    params = (school_name, address, city, phone, email)
+    result = execute_query(query, params)
+
+    # Manejo de errores o confirmación del registro
+    if result is None:
+        return {"error": "Error registrando la escuela"}, 500
+    return {"message": "Escuela registrada exitosamente"}, 201
+
