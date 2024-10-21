@@ -1,12 +1,10 @@
-from flask import Flask, request, jsonify, make_response, session
+from flask import Flask, request, jsonify, make_response, sessions, session
 from flask_cors import CORS
 import mysql.connector
 from werkzeug.security import generate_password_hash, check_password_hash
-import random
-import string
-
 app = Flask(__name__)
-CORS(app)
+CORS(app,supports_credentials=True)
+
 app.secret_key = b'_5#y2L"F4Q8DsasDajwuh12z\n\xec]/'
 
 # Conexión a la base de datos
@@ -14,9 +12,9 @@ def db_connection():
     try:
         db = mysql.connector.connect(
             host="localhost",
-            user="flask_user",
-            password="cosa222",
-            database="classpanner",
+            user="root",
+            password="",
+            database="reports",
             port=3306
         )
         return db
@@ -63,9 +61,29 @@ def changeUser():
     user_type = request.json.get("user_type")
     return {"message": f"Changed user type to {user_type}"}, 201
 
+@app.route("/users", methods=["GET"])
+def getUsers():
+    user_type = session["user_type"]
+    print(user_type)
+    if not user_type:
+        return {"message": f"Debes de registrarte"}, 403
+    if user_type == "visitor":
+        return {"message": f"No puedes realizar cambios."}, 403
+    if user_type == "docente":
+        return execute_query("SELECT username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor'",fetch_all=True), 200
+    if user_type == "director":
+        return execute_query("SELECT username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor' OR user_type = 'docente'",fetch_all=True), 200
+    if user_type == "admin":
+        return execute_query("SELECT username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor' OR user_type = 'docente' OR user_type = 'director'",fetch_all=True), 200
+    else:
+        return {"message": f"Error en el servidor."}, 500
+
 # Inicio de sesión
 @app.route("/login", methods=["POST"])
 def login():
+    user = request.cookies.get("session")
+    if user:
+        return f'Ya estas ingresado {session["username"]}', 403
     username = request.json.get("username")
     password = request.json.get("password")
 
@@ -74,15 +92,18 @@ def login():
 
     user_type = auth(username, password)
     if user_type:
+        res = make_response({"message": "Login successful", "user_type": user_type}, 200)
         session["username"] = username
         session["user_type"] = user_type
-        return {"message": "Login successful", "user_type": user_type}, 200
+        return res
     else:
         return {"error": "El usuario o la contraseña son incorrectos."}, 401
 
 # Registro de usuarios
 @app.route("/register", methods=["POST"])
 def register():
+    if request.cookies.get("session"):
+        return f"ya ha ingresado al sistema como {session['username']}", 403
     username = request.json.get("username")
     password = request.json.get("password")
     repassword = request.json.get("repassword")
@@ -102,7 +123,8 @@ def register():
     """
     params = (username, hashed_password, dni, birthday)
     result = execute_query(query, params)
-
+    session["username"] = username
+    session["user_type"] = "visitor"
     if result is None:
         return {"error": "Error registrando el usuario"}, 500
     return {"message": "Usuario registrado exitosamente"}, 201
