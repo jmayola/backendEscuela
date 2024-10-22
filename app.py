@@ -26,17 +26,20 @@ def db_connection():
 def execute_query(query, params=None, fetch_one=False, fetch_all=False):
     db = db_connection()
     if db is None:
+        print("No se pudo establecer conexión con la base de datos.")
         return None
 
     try:
         cursor = db.cursor(dictionary=True)
         cursor.execute(query, params)
+        
         if fetch_one:
             result = cursor.fetchone()
         elif fetch_all:
             result = cursor.fetchall()
         else:
             result = None
+            
         db.commit()
         cursor.close()
         db.close()
@@ -44,6 +47,7 @@ def execute_query(query, params=None, fetch_one=False, fetch_all=False):
     except mysql.connector.Error as excp:
         print(f"Error ejecutando la consulta: {excp}")
         return None
+
 
 # Autenticación de usuarios
 def auth(username, passwd):
@@ -189,7 +193,6 @@ def registerRep():
         data["descripcion"],
         data["categoria"],
         "EEST N°1"
-        #data["escuela"]  # Se toma el valor del cuerpo de la solicitud
     )
     result = execute_query(query, params)
     print(result)
@@ -233,4 +236,34 @@ def register_school():
     if result is None:
         return {"error": "Error registrando la escuela"}, 500
     return {"message": "Escuela registrada exitosamente"}, 201
+
+@app.route("/escuelas", methods=["GET"])
+def get_schools():
+    try:
+        query = "SELECT id_escuela, nombre, director, calle, altura, cue, localidad, lat, lng FROM escuelas"
+        result = execute_query(query=query, fetch_all=True)
+
+        if result is None:
+            return {"error": "No se encontraron escuelas"}, 404
+
+        escuelas = []
+        for row in result:
+            escuelas.append({
+                "id_escuela": row['id_escuela'],
+                "nombre": row['nombre'],
+                "director": row['director'],
+                "calle": row['calle'],
+                "altura": row['altura'],
+                "cue": row['cue'],
+                "localidad": row['localidad'],
+                "lat": row['lat'],
+                "lng": row['lng']
+            })
+
+        return {"data": escuelas}, 200
+
+    except Exception as e:
+        print(f"Error al obtener las escuelas: {e}")
+        return {"error": "Error interno del servidor"}, 500
+
 
