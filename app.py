@@ -169,8 +169,9 @@ def repMet():
 def registerRep():
     # Extraer datos del reporte
     data = request.json
-    fields = ["lat", "lng", "calle", "altura", "localidad", "descripcion", "categoria", "escuela"]
-
+    fields = ["lat", "lng", "calle", "altura", "localidad", "descripcion", "categoria"]
+    # fields = ["lat", "lng", "calle", "altura", "localidad", "descripcion", "categoria", "escuela"]
+    print(data)
     # Validar que todos los campos estén presentes
     if not all(data.get(field) for field in fields):
         return {"error": "Todos los campos son obligatorios"}, 403
@@ -187,13 +188,14 @@ def registerRep():
         data["lng"],
         data["descripcion"],
         data["categoria"],
-        data["escuela"]  # Se toma el valor del cuerpo de la solicitud
+        "EEST N°1"
+        #data["escuela"]  # Se toma el valor del cuerpo de la solicitud
     )
     result = execute_query(query, params)
-
+    print(result)
     if result is None:
-        return {"error": "Error registrando el reporte"}, 500
-    return {"message": "Reporte ingresado exitosamente"}, 201
+        # return {"error": "Error registrando el reporte"}, 500
+        return {"message": "Reporte ingresado exitosamente"}, 201
 def verRep():
     query = """
     SELECT lat, lng, descripcion, escuela, fecha_reporte, categoria, user_id 
