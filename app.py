@@ -70,11 +70,11 @@ def getUsers():
     if user_type == "visitor":
         return {"message": f"No puedes realizar cambios."}, 403
     if user_type == "docente":
-        return execute_query("SELECT username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor'",fetch_all=True), 200
+        return execute_query("SELECT id_user,username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor'",fetch_all=True), 200
     if user_type == "director":
-        return execute_query("SELECT username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor' OR user_type = 'docente'",fetch_all=True), 200
+        return execute_query("SELECT id_user,username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor' OR user_type = 'docente'",fetch_all=True), 200
     if user_type == "admin":
-        return execute_query("SELECT username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor' OR user_type = 'docente' OR user_type = 'director'",fetch_all=True), 200
+        return execute_query("SELECT id_user,username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor' OR user_type = 'docente' OR user_type = 'director'",fetch_all=True), 200
     else:
         return {"message": f"Error en el servidor."}, 500
 
