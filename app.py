@@ -126,8 +126,8 @@ def register():
     session["username"] = username
     session["user_type"] = "visitor"
     if result is None:
-        return {"error": "Error registrando el usuario"}, 500
-    return {"message": "Usuario registrado exitosamente"}, 201
+        # return {"error": "Error registrando el usuario"}, 500
+        return {"message": "Usuario registrado exitosamente"}, 201
 
 # Inicio de sesión con Google
 @app.route("/google-login", methods=["POST"])
