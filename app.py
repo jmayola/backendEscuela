@@ -173,7 +173,7 @@ def repMet():
 def registerRep():
     # Extraer datos del reporte
     data = request.json
-    fields = ["lat", "lng", "calle", "altura", "localidad", "descripcion", "categoria"]
+    fields = ["lat", "lng", "calle", "altura", "localidad", "descripcion", "categoria", "reporte_del_problema"]
     # fields = ["lat", "lng", "calle", "altura", "localidad", "descripcion", "categoria", "escuela"]
     print(data)
     # Validar que todos los campos estén presentes
@@ -181,8 +181,8 @@ def registerRep():
         return {"error": "Todos los campos son obligatorios"}, 403
 
     query = """
-        INSERT INTO reports (calle, altura, localidad, lat, lng, descripcion, categoria, escuela) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO reports (calle, altura, localidad, lat, lng, descripcion, categoria, escuela, reporte_del_problema) 
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     params = (
         data["calle"],
@@ -192,7 +192,8 @@ def registerRep():
         data["lng"],
         data["descripcion"],
         data["categoria"],
-        "EEST N°1"
+        "EEST N°1",
+        data["reporte_del_problema"],
     )
     result = execute_query(query, params)
     print(result)
@@ -201,7 +202,7 @@ def registerRep():
         return {"message": "Reporte ingresado exitosamente"}, 201
 def verRep():
     query = """
-    SELECT lat, lng, descripcion, escuela, fecha_reporte, categoria, user_id 
+    SELECT lat, lng, descripcion, escuela, fecha_reporte, categoria, user_id , reporte_del_problema
     FROM reports
     """
     result = execute_query(query, fetch_all=True)
