@@ -58,14 +58,47 @@ def auth(username, passwd):
         return None
     return result['user_type']
 
+# Obtencion de datos personales
+def getUserData(username):
+    query = "SELECT id_user,nacimiento FROM usuarios WHERE username = %s"
+    result = execute_query(query, (username,), fetch_one=True)
+    return {"id_user":result["id_user"],"nacimiento":result["nacimiento"],"username":session["username"],"user_type":session["user_type"]}
 # Cambiar tipo de usuario
-@app.route("/user", methods=["PUT"])
-def changeUser():
-    username = request.json.get("username")
-    user_type = request.json.get("user_type")
-    return {"message": f"Changed user type to {user_type}"}, 201
+@app.route("/user", methods=["GET","PUT","DELETE"])
+def userData():
+    if request.method == "DELETE":
+        return deleteSession()
+    elif request.method == "PUT":
+        return changeUser()
+    elif request.method == "GET":
+        if session:
+            return getUserData(session["username"]), 202
+            #return {"message":"La sesión no existe"}, 401
+        else:
+            return {"message":"La sesión no existe"}, 401
 
-@app.route("/users", methods=["GET"])
+def changeUser():
+    try:
+        for user in request.json:
+            username = user.get("id_user")
+            user_type = user.get("user_type")
+            query = "UPDATE `usuarios` SET `user_type` = %s WHERE `id_user` = %s;"
+            result = execute_query(query,(user_type,username))
+            print(result)
+
+        return {"message": f"Changed user type"}, 201
+    except Exception as e:
+        return e,500
+
+@app.route("/users", methods=["GET","DELETE"])
+def userMethods():
+    if request.method == "DELETE":
+        return deleteSession()
+    elif request.method == "GET":
+        return getUsers()
+def deleteSession():
+    session.clear()
+    return {"message":"Session cerrada"},202
 def getUsers():
     user_type = session["user_type"]
     print(user_type)
@@ -129,6 +162,7 @@ def register():
     result = execute_query(query, params)
     session["username"] = username
     session["user_type"] = "visitor"
+    session["dni"] = dni
     if result is None:
         # return {"error": "Error registrando el usuario"}, 500
         return {"message": "Usuario registrado exitosamente"}, 201
@@ -173,7 +207,7 @@ def repMet():
 def registerRep():
     # Extraer datos del reporte
     data = request.json
-    fields = ["lat", "lng", "calle", "altura", "localidad", "descripcion", "categoria", "reporte_del_problema"]
+    fields = ["lat", "lng", "calle", "altura", "localidad", "descripcion", "categoria", "reporte_del_problema","id_user"]
     # fields = ["lat", "lng", "calle", "altura", "localidad", "descripcion", "categoria", "escuela"]
     print(data)
     # Validar que todos los campos estén presentes
@@ -181,8 +215,8 @@ def registerRep():
         return {"error": "Todos los campos son obligatorios"}, 403
 
     query = """
-        INSERT INTO reports (calle, altura, localidad, lat, lng, descripcion, categoria, escuela, reporte_del_problema) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO reports (calle, altura, localidad, lat, lng, descripcion, categoria, escuela, reporte_del_problema,user_id) 
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,%s)
     """
     params = (
         data["calle"],
@@ -194,6 +228,7 @@ def registerRep():
         data["categoria"],
         "EEST N°1",
         data["reporte_del_problema"],
+        data["id_user"]
     )
     result = execute_query(query, params)
     print(result)
@@ -202,8 +237,7 @@ def registerRep():
         return {"message": "Reporte ingresado exitosamente"}, 201
 def verRep():
     query = """
-    SELECT lat, lng, descripcion, escuela, fecha_reporte, categoria, user_id , reporte_del_problema
-    FROM reports
+    SELECT lat, lng, descripcion, escuela, fecha_reporte, categoria, user_id,reporte_del_problema FROM reports
     """
     result = execute_query(query, fetch_all=True)
 

@@ -9,11 +9,11 @@ payload = {
 }
 
 # URL del servidor
-url = "http://localhost:3000"
+url = "http://localhost:3000/user"
 
 try:
     # Enviar la solicitud POST al servidor con el payload en formato JSON
-    response = requests.post(url, json=payload)
+    response = requests.get(url,headers={'Cookie':"users=MTcyOTc4NTU5NHxEWDhFQVFMX2dBQUJFQUVRQUFCTl80QUFBZ1p6ZEhKcGJtY01DZ0FJZFhObGNtNWhiV1VHYzNSeWFXNW5EQWdBQmtwMWJHbGhiZ1p6ZEhKcGJtY01Dd0FKZFhObGNsOTBlWEJsQm5OMGNtbHVad3dJQUFaaGJIVnRibTg9fDyMQ3waamZJ7ccpHQoh447o2a_oXNf9HByOvTUb-GMX"})# json=payload)
 
     # Comprobar si la solicitud fue exitosa
     if response.status_code == 200:
