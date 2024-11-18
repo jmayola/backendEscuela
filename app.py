@@ -2,20 +2,22 @@ from flask import Flask, request, jsonify, make_response, sessions, session
 from flask_cors import CORS
 import mysql.connector
 from werkzeug.security import generate_password_hash, check_password_hash
+from dotenv import load_dotenv
+import os
 app = Flask(__name__)
 CORS(app,supports_credentials=True)
-
+load_dotenv()
 app.secret_key = b'_5#y2L"F4Q8DsasDajwuh12z\n\xec]/'
 
 # Conexión a la base de datos
 def db_connection():
     try:
         db = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="",
-            database="reports",
-            port=3306
+            host=os.getenv("host"),
+            user=os.getenv("user"),
+            password=os.getenv("password"),
+            database=os.getenv("database"),
+            port=os.getenv("port")
         )
         return db
     except mysql.connector.Error as excp:
