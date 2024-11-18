@@ -302,5 +302,33 @@ def get_schools():
     except Exception as e:
         print(f"Error al obtener las escuelas: {e}")
         return {"error": "Error interno del servidor"}, 500
+    
+@app.route("/reportes/pendientes", methods=["GET"])
+def reportes_pendientes():
+    query = """
+    SELECT lat, lng, descripcion, escuela, fecha_reporte, categoria, user_id, reporte_del_problema 
+    FROM reports 
+    WHERE estado = 'pendiente'
+    """
+    result = execute_query(query, fetch_all=True)
+    if result is None:
+        return {"error": "Error obteniendo los reportes pendientes"}, 500
+    return jsonify(result), 200
+
+@app.route("/reporte/aceptar/<int:reporte_id>", methods=["POST"])
+def aceptar_reporte(reporte_id):
+    query = "UPDATE reports SET estado = 'aceptado' WHERE id_reports = %s"
+    result = execute_query(query, (reporte_id,))
+    if result is None:
+        return {"error": "Error al aprobar el reporte"}, 500
+    return {"message": "Reporte aprobado"}, 200
+
+@app.route("/reporte/rechazar/<int:reporte_id>", methods=["POST"])
+def rechazar_reporte(reporte_id):
+    query = "UPDATE reports SET estado = 'rechazado' WHERE id_reports = %s"
+    result = execute_query(query, (reporte_id,))
+    if result is None:
+        return {"error": "Error al rechazar el reporte"}, 500
+    return {"message": "Reporte rechazado"}, 200
 
 
