@@ -26,28 +26,52 @@ def db_connection():
 
 # Ejecutar consultas en la base de datos
 def execute_query(query, params=None, fetch_one=False, fetch_all=False):
+
     db = db_connection()
+
     if db is None:
+
         print("No se pudo establecer conexión con la base de datos.")
+
         return None
 
+
     try:
+
         cursor = db.cursor(dictionary=True)
+
         cursor.execute(query, params)
+
         
+
         if fetch_one:
+
             result = cursor.fetchone()
+
         elif fetch_all:
+
             result = cursor.fetchall()
+
+            print("Resultados obtenidos de la base de datos:", result)  # Verifica lo que se obtiene
+
         else:
+
             result = None
+
             
+
         db.commit()
+
         cursor.close()
+
         db.close()
+
         return result
+
     except mysql.connector.Error as excp:
+
         print(f"Error ejecutando la consulta: {excp}")
+
         return None
 
 
@@ -330,5 +354,26 @@ def rechazar_reporte(reporte_id):
     if result is None:
         return {"error": "Error al rechazar el reporte"}, 500
     return {"message": "Reporte rechazado"}, 200
+
+@app.route('/estadisticas', methods=['GET'])
+def estadisticas():
+    try:
+        query = """
+            SELECT categoria, COUNT(*) AS total
+            FROM reports
+            GROUP BY categoria;
+        """
+        resultados = execute_query(query, fetch_all=True)
+
+        if resultados is None:
+            return jsonify({"error": "No se pudieron obtener las estadísticas."}), 500
+
+        print("Resultados que se van a enviar:", resultados)
+        return jsonify(resultados)
+
+    except Exception as e:
+        print(f"Error en la consulta: {e}")
+        return jsonify({"error": "Ocurrió un error en el servidor."}), 500
+
 
 
