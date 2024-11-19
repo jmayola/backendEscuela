@@ -106,14 +106,14 @@ def getUsers():
     print(user_type)
     if not user_type:
         return {"message": f"Debes de registrarte"}, 403
-    if user_type == "visitor":
+    if user_type == "visitor" or user_type == "alumno":
         return {"message": f"No puedes realizar cambios."}, 403
     if user_type == "docente":
-        return execute_query("SELECT id_user,username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor'",fetch_all=True), 200
+        return execute_query("SELECT id_user,username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor' OR user_type = 'alumno'",fetch_all=True), 200
     if user_type == "director":
-        return execute_query("SELECT id_user,username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor' OR user_type = 'docente'",fetch_all=True), 200
+        return execute_query("SELECT id_user,username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor' OR user_type = 'docente' OR user_type = 'alumno'",fetch_all=True), 200
     if user_type == "admin":
-        return execute_query("SELECT id_user,username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor' OR user_type = 'docente' OR user_type = 'director'",fetch_all=True), 200
+        return execute_query("SELECT id_user,username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor' OR user_type = 'docente' OR user_type = 'director' OR user_type = 'alumno'",fetch_all=True), 200
     else:
         return {"message": f"Error en el servidor."}, 500
 
@@ -306,8 +306,9 @@ def get_schools():
 @app.route("/reportes/pendientes", methods=["GET"])
 def reportes_pendientes():
     query = """
-    SELECT lat, lng, descripcion, escuela, fecha_reporte, categoria, user_id, reporte_del_problema 
+    SELECT id_reports,lat, lng, descripcion, escuela, fecha_reporte, categoria, usuarios.username, usuarios.dni, reporte_del_problema 
     FROM reports 
+    INNER JOIN usuarios ON usuarios.id_user=reports.user_id
     WHERE estado = 'pendiente'
     """
     result = execute_query(query, fetch_all=True)
@@ -319,7 +320,7 @@ def reportes_pendientes():
 def aceptar_reporte(reporte_id):
     query = "UPDATE reports SET estado = 'aceptado' WHERE id_reports = %s"
     result = execute_query(query, (reporte_id,))
-    if result is None:
+    if result is not None:
         return {"error": "Error al aprobar el reporte"}, 500
     return {"message": "Reporte aprobado"}, 200
 
@@ -327,8 +328,27 @@ def aceptar_reporte(reporte_id):
 def rechazar_reporte(reporte_id):
     query = "UPDATE reports SET estado = 'rechazado' WHERE id_reports = %s"
     result = execute_query(query, (reporte_id,))
-    if result is None:
+    if result is not None:
         return {"error": "Error al rechazar el reporte"}, 500
     return {"message": "Reporte rechazado"}, 200
 
+@app.route("/asignarescuela", methods=["POST"])
+def asignar_usuario_escuela():
+    data = request.get_json()
+    usuario = data.get('usuario')
+    escuela = data.get('escuela')
 
+    if not usuario or not escuela:
+        return {"error": "Faltan datos"}, 400
+
+    try:
+        # Aquí iría el código para agregar al usuario a la escuela
+        # Ejemplo: inserción en la tabla que asocia usuarios con escuelas
+        query = """
+        INSERT INTO usuarios_escuelas (id_escuela, id_user)
+        VALUES (%s, %s)
+        """
+        execute_query(query, (usuario['id_user'], escuela['id_escuela']))
+        return {"message": "Usuario asignado correctamente a la escuela"}, 200
+    except Exception as e:
+        return {"error": str(e)}, 500
