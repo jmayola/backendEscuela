@@ -426,7 +426,7 @@ def reporteaceptar(reporte_id):
 
 def getreportesaceptar(reporte_id):
     query = """
-    SELECT r.id_reports, r.lat, r.lng, r.descripcion, r.escuela, r.fecha_reporte, r.categoria, usuarios.username, usuarios.dni, r.reporte_del_problema, es.nombre,es.cue,es.localidad
+    SELECT r.id_reports, r.lat, r.lng, r.descripcion, r.escuela, r.fecha_reporte, r.feedback, r.categoria, usuarios.username, usuarios.dni, r.reporte_del_problema, es.nombre,es.cue,es.localidad
     FROM reports r
     INNER JOIN usuarios ON usuarios.id_user=r.user_id
     INNER JOIN escuela_det ed ON ed.id_user=r.user_id
@@ -438,8 +438,10 @@ def getreportesaceptar(reporte_id):
         return {"error": "Error al aprobar el reporte"}, 500
     return jsonify(result), 200
 def aceptar_reporte(reporte_id):
-    query = "UPDATE reports SET estado = 'aceptado' WHERE id_reports = %s"
-    result = execute_query(query, (reporte_id,))
+    data = request.get_json()
+    feedback = data.get('feedback')
+    query = "UPDATE reports SET estado = 'aceptado', feedback = %s WHERE id_reports = %s"
+    result = execute_query(query, (feedback,reporte_id,))
     if result is not None:
         return {"error": "Error al aprobar el reporte"}, 500
     return {"message": "Reporte aprobado"}, 200
@@ -453,7 +455,7 @@ def reporterechazado(reporte_id):
         
 def getreportesrechazados(reporte_id):
     query = """
-    SELECT id_reports,lat, lng, descripcion, escuela, fecha_reporte, categoria, usuarios.username, usuarios.dni, reporte_del_problema 
+    SELECT id_reports,lat, lng, descripcion, escuela, fecha_reporte, categoria, usuarios.username, usuarios.dni, reporte_del_problema, feedback 
     FROM reports 
     INNER JOIN usuarios ON usuarios.id_user=reports.user_id
     WHERE estado = 'rechazado'
@@ -463,11 +465,25 @@ def getreportesrechazados(reporte_id):
         return {"error": "Error al aprobar el reporte"}, 500
     return jsonify(result), 200
 def rechazar_reporte(reporte_id):
-    query = "UPDATE reports SET estado = 'rechazado' WHERE id_reports = %s"
-    result = execute_query(query, (reporte_id,))
+    data = request.get_json()
+    feedback = data.get('feedback')
+    query = "UPDATE reports SET estado = 'rechazado', feedback = %s WHERE id_reports = %s"
+    result = execute_query(query, (feedback,reporte_id))
     if result is not None:
         return {"error": "Error al rechazar el reporte"}, 500
     return {"message": "Reporte rechazado"}, 200
+@app.route("/reporte/alumno/", methods=["GET"])
+def getFeedback():
+    query = """
+    SELECT id_reports,lat, lng, descripcion, escuela, fecha_reporte, categoria, usuarios.username, usuarios.dni, reporte_del_problema, feedback 
+    FROM reports 
+    INNER JOIN usuarios ON usuarios.id_user=reports.user_id
+    WHERE usuarios.id_user = %s
+    """
+    result = execute_query(query,(session.get("id_user",)),fetch_all=True)
+    if result is None:
+        return {"error": "Error al aprobar el reporte"}, 500
+    return jsonify(result), 200
 
 @app.route("/asignarescuela", methods=["POST"])
 def asignarescuela():
