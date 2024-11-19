@@ -263,13 +263,13 @@ def repMet():
     if request.method == "POST":
         return registerRep()
     elif request.method == "GET":
-        return verRep()
+        return getreportesaceptar()
     return {"error": "Ha ocurrido un error"}, 500
 
 def registerRep():
     # Extraer datos del reporte
     data = request.json
-    fields = ["lat", "lng", "calle", "altura", "localidad", "descripcion", "categoria", "reporte_del_problema","id_user"]
+    fields = ["lat", "lng", "calle", "altura", "localidad", "escuela", "descripcion", "categoria", "reporte_del_problema","id_user"]
     # fields = ["lat", "lng", "calle", "altura", "localidad", "descripcion", "categoria", "escuela"]
     # Validar que todos los campos estén presentes
     if not all(data.get(field) for field in fields):
@@ -287,7 +287,7 @@ def registerRep():
         data["lng"],
         data["descripcion"],
         data["categoria"],
-        "EEST N°1",
+        data["escuela"],
         data["reporte_del_problema"],
         data["id_user"]
     )
@@ -417,7 +417,26 @@ def reportes_pendientes():
         return {"error": "Error obteniendo los reportes pendientes"}, 500
     return jsonify(result), 200
 
-@app.route("/reporte/aceptar/<int:reporte_id>", methods=["POST"])
+@app.route("/reporte/aceptar/<int:reporte_id>", methods=["GET","POST"])
+def reporteaceptar(reporte_id):
+    if request.method == "GET":
+        return getreportesaceptar(reporte_id)
+    elif request.method == "POST":
+        return aceptar_reporte(reporte_id)
+
+def getreportesaceptar(reporte_id):
+    query = """
+    SELECT r.id_reports, r.lat, r.lng, r.descripcion, r.escuela, r.fecha_reporte, r.categoria, usuarios.username, usuarios.dni, r.reporte_del_problema, es.nombre,es.cue,es.localidad
+    FROM reports r
+    INNER JOIN usuarios ON usuarios.id_user=r.user_id
+    INNER JOIN escuela_det ed ON ed.id_user=r.user_id
+    INNER JOIN escuelas es ON es.id_escuela=ed.id_escuela
+    WHERE estado = 'aceptado'
+    """
+    result = execute_query(query,fetch_all=True)
+    if result is None:
+        return {"error": "Error al aprobar el reporte"}, 500
+    return jsonify(result), 200
 def aceptar_reporte(reporte_id):
     query = "UPDATE reports SET estado = 'aceptado' WHERE id_reports = %s"
     result = execute_query(query, (reporte_id,))
@@ -425,7 +444,24 @@ def aceptar_reporte(reporte_id):
         return {"error": "Error al aprobar el reporte"}, 500
     return {"message": "Reporte aprobado"}, 200
 
-@app.route("/reporte/rechazar/<int:reporte_id>", methods=["POST"])
+@app.route("/reporte/rechazar/<int:reporte_id>", methods=["GET","POST"])
+def reporterechazado(reporte_id):
+    if request.method == "GET":
+        return getreportesrechazados(reporte_id)
+    elif request.method == "POST":
+        return rechazar_reporte(reporte_id)
+        
+def getreportesrechazados(reporte_id):
+    query = """
+    SELECT id_reports,lat, lng, descripcion, escuela, fecha_reporte, categoria, usuarios.username, usuarios.dni, reporte_del_problema 
+    FROM reports 
+    INNER JOIN usuarios ON usuarios.id_user=reports.user_id
+    WHERE estado = 'rechazado'
+    """
+    result = execute_query(query,fetch_all=True)
+    if result is None:
+        return {"error": "Error al aprobar el reporte"}, 500
+    return jsonify(result), 200
 def rechazar_reporte(reporte_id):
     query = "UPDATE reports SET estado = 'rechazado' WHERE id_reports = %s"
     result = execute_query(query, (reporte_id,))
@@ -476,6 +512,7 @@ def estadisticas():
         query = """
             SELECT categoria, COUNT(*) AS total
             FROM reports
+            WHERE estado = "aceptado"
             GROUP BY categoria;
         """
         resultados = execute_query(query, fetch_all=True)
