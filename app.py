@@ -52,7 +52,7 @@ def execute_query(query, params=None, fetch_one=False, fetch_all=False):
 
             result = cursor.fetchall()
 
-            print("Resultados obtenidos de la base de datos:", result)  # Verifica lo que se obtiene
+            # print("Resultados obtenidos de la base de datos:", result)  # Verifica lo que se obtiene
 
         else:
 
@@ -88,7 +88,10 @@ def auth(username, passwd):
 def getUserData(username):
     query = "SELECT id_user,nacimiento FROM usuarios WHERE username = %s"
     result = execute_query(query, (username,), fetch_one=True)
-    return {"id_user":result["id_user"],"nacimiento":result["nacimiento"],"username":session["username"],"user_type":session["user_type"]}
+    if result is not None:
+        return {"id_user":result["id_user"],"nacimiento":result["nacimiento"],"username":session["username"],"user_type":session["user_type"]}
+    else:
+        return {"message":"La sesión no existe"}, 401
 # Cambiar tipo de usuario
 @app.route("/user", methods=["GET","PUT","DELETE"])
 def userData():
@@ -127,17 +130,50 @@ def deleteSession():
     return {"message":"Session cerrada"},202
 def getUsers():
     user_type = session["user_type"]
-    print(user_type)
+    user_types_map = {
+        "docente": "('visitor', 'alumno')",
+        "director": "('visitor', 'alumno', 'docente')",
+        "admin": "('visitor', 'alumno', 'docente', 'director')"
+    }
     if not user_type:
-        return {"message": f"Debes de registrarte"}, 403
+        return {"message": "Debes de registrarte"}, 403
+    if user_type not in user_types_map:
+        return {"message": "Error en el servidor."}, 500
+    allowed_user_types = user_types_map[user_type]
+    query="SELECT u.id_user,u.username,u.dni,u.nacimiento,u.user_type FROM usuarios u WHERE u.user_type IN" + allowed_user_types
+    print(query)
     if user_type == "visitor" or user_type == "alumno":
         return {"message": f"No puedes realizar cambios."}, 403
     if user_type == "docente":
-        return execute_query("SELECT id_user,username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor' OR user_type = 'alumno'",fetch_all=True), 200
+        return execute_query(query,fetch_all=True), 200
     if user_type == "director":
-        return execute_query("SELECT id_user,username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor' OR user_type = 'docente' OR user_type = 'alumno'",fetch_all=True), 200
+        return execute_query(query,fetch_all=True), 200
     if user_type == "admin":
-        return execute_query("SELECT id_user,username,dni,nacimiento,user_type FROM usuarios WHERE user_type = 'visitor' OR user_type = 'docente' OR user_type = 'director' OR user_type = 'alumno'",fetch_all=True), 200
+        return execute_query(query,fetch_all=True), 200
+    else:
+        return {"message": f"Error en el servidor."}, 500
+def getUsersWithSchool():
+    user_type = session["user_type"]
+    user_types_map = {
+        "docente": "('visitor', 'alumno')",
+        "director": "('visitor', 'alumno', 'docente')",
+        "admin": "('visitor', 'alumno', 'docente', 'director')"
+    }
+    if not user_type:
+        return {"message": "Debes de registrarte"}, 403
+    if user_type not in user_types_map:
+        return {"message": "Error en el servidor."}, 500
+    allowed_user_types = user_types_map[user_type]
+    query="SELECT u.id_user,u.username,u.dni,u.nacimiento,u.user_type,e.nombre,e.localidad FROM usuarios u INNER JOIN escuela_det ed ON ed.id_user = u.id_user INNER JOIN escuelas e ON e.id_escuela = ed.id_escuela WHERE u.user_type IN" + allowed_user_types
+    print(query)
+    if user_type == "visitor" or user_type == "alumno":
+        return {"message": f"No puedes realizar cambios."}, 403
+    if user_type == "docente":
+        return execute_query(query,fetch_all=True), 200
+    if user_type == "director":
+        return execute_query(query,fetch_all=True), 200
+    if user_type == "admin":
+        return execute_query(query,fetch_all=True), 200
     else:
         return {"message": f"Error en el servidor."}, 500
 
@@ -235,7 +271,6 @@ def registerRep():
     data = request.json
     fields = ["lat", "lng", "calle", "altura", "localidad", "descripcion", "categoria", "reporte_del_problema","id_user"]
     # fields = ["lat", "lng", "calle", "altura", "localidad", "descripcion", "categoria", "escuela"]
-    print(data)
     # Validar que todos los campos estén presentes
     if not all(data.get(field) for field in fields):
         return {"error": "Todos los campos son obligatorios"}, 403
@@ -257,7 +292,6 @@ def registerRep():
         data["id_user"]
     )
     result = execute_query(query, params)
-    print(result)
     if result is None:
         # return {"error": "Error registrando el reporte"}, 500
         return {"message": "Reporte ingresado exitosamente"}, 201
@@ -298,7 +332,12 @@ def register_school():
         return {"error": "Error registrando la escuela"}, 500
     return {"message": "Escuela registrada exitosamente"}, 201
 
-@app.route("/escuelas", methods=["GET"])
+@app.route("/escuelas", methods=["GET","POST"])
+def SchoolMethods():
+    if request.method == "GET":
+        return get_schools()
+    elif request.method == "POST":
+        return add_school()
 def get_schools():
     try:
         query = "SELECT id_escuela, nombre, director, calle, altura, cue, localidad, lat, lng FROM escuelas"
@@ -325,6 +364,44 @@ def get_schools():
 
     except Exception as e:
         print(f"Error al obtener las escuelas: {e}")
+        return {"error": "Error interno del servidor"}, 500
+    
+def add_school():
+    try:
+        data = request.get_json()
+
+        required_fields = ['nombre', 'director', 'calle', 'altura', 'cue', 'localidad', 'latitud', 'longitud']
+        for field in required_fields:
+            if field not in data:
+                return {"error": f"Falta el campo: {field}"}, 400
+
+        nombre = data['nombre']
+        director = data['director']
+        calle = data['calle']
+        altura = data['altura']
+        cue = data['cue']
+        localidad = data['localidad']
+        lat = data['latitud']
+        lng = data['longitud']
+
+        query = """
+        INSERT INTO escuelas (nombre, director, calle, altura, cue, localidad, lat, lng)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """
+
+        execute_query(query, (nombre, director, calle, altura, cue, localidad, lat, lng))
+        query_id_escuela = "SELECT MAX(id_escuela) from escuelas"
+        id_escuela = execute_query(query_id_escuela, fetch_one=True)
+        # Paso 3: Insertar la relación en la tabla escuela_det
+        query_escuela_det = """
+        INSERT INTO escuela_det (id_escuela, user_id)
+        VALUES (%s, %s)
+        """
+        execute_query(query_escuela_det, (id_escuela, director))
+        return {"message": "Escuela agregada correctamente"}, 201
+
+    except Exception as e:
+        print(f"Error al agregar la escuela: {e}")
         return {"error": "Error interno del servidor"}, 500
     
 @app.route("/reportes/pendientes", methods=["GET"])
@@ -357,24 +434,42 @@ def rechazar_reporte(reporte_id):
     return {"message": "Reporte rechazado"}, 200
 
 @app.route("/asignarescuela", methods=["POST"])
-def asignar_usuario_escuela():
+def asignarescuela():
     data = request.get_json()
     usuario = data.get('usuario')
     escuela = data.get('escuela')
+
     if not usuario or not escuela:
         return {"error": "Faltan datos"}, 400
 
     try:
-        # Aquí iría el código para agregar al usuario a la escuela
-        # Ejemplo: inserción en la tabla que asocia usuarios con escuelas
-        query = """
-        INSERT INTO usuarios_escuelas (id_escuela, id_user)
-        VALUES (%s, %s)
+        # Primero verificamos si el usuario ya está asignado a una escuela
+        check_query = """
+        SELECT * FROM escuela_det WHERE id_user = %s
         """
-        execute_query(query, (usuario['id_user'], escuela['id_escuela']))
-        return {"message": "Usuario asignado correctamente a la escuela"}, 200
+        result = execute_query(check_query, (usuario,), fetch_one=True)
+
+        if result:
+            # Si el usuario ya está asignado a una escuela, actualizamos la asignación
+            update_query = """
+            UPDATE escuela_det
+            SET id_escuela = %s
+            WHERE id_user = %s
+            """
+            execute_query(update_query, (escuela, usuario))
+            return {"message": "Usuario actualizado correctamente a la nueva escuela"}, 200
+        else:
+            # Si el usuario no está asignado a ninguna escuela, insertamos una nueva asignación
+            insert_query = """
+            INSERT INTO escuela_det (id_escuela, id_user)
+            VALUES (%s, %s)
+            """
+            execute_query(insert_query, (escuela, usuario))
+            return {"message": "Usuario asignado correctamente a la escuela"}, 200
+
     except Exception as e:
         return {"error": str(e)}, 500
+
 @app.route('/estadisticas', methods=['GET'])
 def estadisticas():
     try:
@@ -389,6 +484,31 @@ def estadisticas():
             return jsonify({"error": "No se pudieron obtener las estadísticas."}), 500
 
         print("Resultados que se van a enviar:", resultados)
+        return jsonify(resultados)
+
+    except Exception as e:
+        print(f"Error en la consulta: {e}")
+        return jsonify({"error": "Ocurrió un error en el servidor."}), 500
+    
+@app.route('/director', methods=['GET'])
+def director():
+    query = """SELECT 
+                    u.id_user,
+                    u.username,
+                    u.dni,
+                    u.nacimiento,
+                    u.user_type
+                FROM 
+                    usuarios u
+                LEFT JOIN 
+                    escuela_det ed ON ed.id_user = u.id_user
+                WHERE 
+                    u.user_type = 'director' AND ed.id_escuela IS NULL;
+            """
+    resultados = execute_query(query, fetch_all=True)
+    try:
+        if resultados is None:
+            return jsonify({"error": "No se pudieron obtener los directores."}), 500
         return jsonify(resultados)
 
     except Exception as e:
