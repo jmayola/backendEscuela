@@ -475,10 +475,10 @@ def rechazar_reporte(reporte_id):
 @app.route("/reporte/alumno/", methods=["GET"])
 def getFeedback():
     query = """
-    SELECT id_reports,lat, lng, descripcion, escuela, fecha_reporte, categoria, usuarios.username, usuarios.dni, reporte_del_problema, feedback 
+    SELECT id_reports,lat, lng, descripcion, escuela, fecha_reporte, categoria, usuarios.username, usuarios.dni, reporte_del_problema, feedback, estado
     FROM reports 
     INNER JOIN usuarios ON usuarios.id_user=reports.user_id
-    WHERE usuarios.username = %s
+    WHERE usuarios.username = %s AND estado = 'aceptado' OR estado = 'rechazado'
     """
     result = execute_query(query,(session["username"],),fetch_all=True)
     if result is None:
