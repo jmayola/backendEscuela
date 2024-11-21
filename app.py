@@ -478,9 +478,9 @@ def getFeedback():
     SELECT id_reports,lat, lng, descripcion, escuela, fecha_reporte, categoria, usuarios.username, usuarios.dni, reporte_del_problema, feedback 
     FROM reports 
     INNER JOIN usuarios ON usuarios.id_user=reports.user_id
-    WHERE usuarios.id_user = %s
+    WHERE usuarios.username = %s
     """
-    result = execute_query(query,(session.get("id_user",)),fetch_all=True)
+    result = execute_query(query,(session["username"],),fetch_all=True)
     if result is None:
         return {"error": "Error al aprobar el reporte"}, 500
     return jsonify(result), 200
